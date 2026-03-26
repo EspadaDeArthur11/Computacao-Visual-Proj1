@@ -2,25 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
-// Exemplo: 04-invert_image
-// O programa carrega o arquivo de imagem indicado na constante IMAGE_FILENAME
-// e exibe o conteúdo na janela ("kodim23.png" pertence ao "Kodak Image Set").
-// A tecla '1' aplica uma transformação de intensidade (negativo da imagem).
-// Caso a imagem seja maior do que WINDOW_WIDTHxWINDOW_HEIGHT, a janela é
-// redimensionada logo após a imagem ser carregada.
-//
-// Observação:
-// Em um projeto mais realista, o código abaixo provavelmente seria refatorado.
-// Alguns exemplos de refatoração do projeto:
-// - Uso de headers (.h) e outros arquivos .c (ex. estruturas e operações
-//   relacionadas à imagens);
-// - Remoção de variáveis globais;
-// - Redução de logs (ou melhor, seriam desativados na build release);
-// - Arquivo de imagem seria um parâmetro do programa (argv), ao invés de ser
-//   uma string constante IMAGE_FILENAME.
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
 // Includes
 //------------------------------------------------------------------------------
 #include <stdio.h>
@@ -59,7 +40,7 @@ struct MyImage
 };
 
 //------------------------------------------------------------------------------
-// Globals (argh!)
+// Globals
 //------------------------------------------------------------------------------
 static MyWindow g_window = { .window = NULL, .renderer = NULL };
 static MyWindow g_childWindow = { .window = NULL, .renderer = NULL };
@@ -82,19 +63,6 @@ static void MyImage_destroy(MyImage *image);
  * carregada é armazenada em output_image.
  */
 static void load_rgba32(const char *filename, SDL_Renderer *renderer, MyImage *output_image);
-
-/**
- * Acessa cada pixel da imagem (MyImage->surface) e inverte sua intensidade.
- * Altera MyImage->surface e atualiza MyImage->texture.
- * 
- * Assumimos que os pixels da imagem estão no formato RGBA32 e que os níveis de
- * intensidade estão no intervalo [0-255].
- * 
- * Na verdade, podemos desconsiderar o canal Alpha, já que ele não terá seu
- * valor invertido. Neste caso, substituímos `SDL_GetRGBA()` e `SDL_MapRGBA()`
- * por `SDL_GetRGB()` e `SDL_MapRGB()`, respectivamente.
- */
-static void invert_image(SDL_Renderer *renderer, MyImage *image);
 
 //------------------------------------------------------------------------------
 //
@@ -289,58 +257,6 @@ void convert_gray_scale_image(SDL_Renderer *renderer, MyImage *image)
     SDL_Log("<<< convert_gray_scale_image()");
 }
 
-void invert_image(SDL_Renderer *renderer, MyImage *image)
-{
-    SDL_Log(">>> invert_image()");
-
-    if (!renderer)
-    {
-        SDL_Log("\t*** Erro: Renderer inválido (renderer == NULL).");
-        SDL_Log("<<< invert_image()");
-        return;
-    }
-
-    if (!image || !image->surface)
-    {
-        SDL_Log("\t*** Erro: Imagem inválida (image == NULL ou image->surface == NULL).");
-        SDL_Log("<<< invert_image()");
-        return;
-    }
-
-    // Para acessar os pixels de uma superfície, precisamos chamar essa função.
-    SDL_LockSurface(image->surface);
-
-    const SDL_PixelFormatDetails *format = SDL_GetPixelFormatDetails(image->surface->format);
-    const size_t pixelCount = image->surface->w * image->surface->h;
-
-    Uint32 *pixels = (Uint32 *)image->surface->pixels;
-    Uint8 r = 0;
-    Uint8 g = 0;
-    Uint8 b = 0;
-    Uint8 a = 0;
-
-    for (size_t i = 0; i < pixelCount; ++i)
-    {
-        SDL_GetRGBA(pixels[i], format, NULL, &r, &g, &b, &a);
-
-        r = 255 - r;
-        g = 255 - g;
-        b = 255 - b;
-
-        pixels[i] = SDL_MapRGBA(format, NULL, r, g, b, a);
-    }
-
-    // Após manipularmos os pixels da superfície, liberamos a superfície.
-    SDL_UnlockSurface(image->surface);
-
-    // Atualizamos a textura a ser renderizada pelo SDL_Renderer, com base no
-    // novo conteúdo da superfície.
-    SDL_DestroyTexture(image->texture);
-    image->texture = SDL_CreateTextureFromSurface(renderer, image->surface);
-
-    SDL_Log("<<< invert_image()");
-}
-
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
@@ -427,8 +343,7 @@ static void loop(void)
     SDL_Log(">>> loop()");
 
     // Para melhorar o uso da CPU (e consumo de energia), só atualizaremos o
-    // conteúdo da janela se realmente for necessário. Nesse exemplo, isso
-    // acontece quando invertemos os pixels da imagem.
+    // conteúdo da janela se realmente for necessário.
     bool mustRefresh = false;
     render();
 
@@ -442,18 +357,6 @@ static void loop(void)
             {
             case SDL_EVENT_QUIT:
                 isRunning = false;
-                break;
-
-            case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_1 && !event.key.repeat)
-                {
-                    invert_image(g_window.renderer, &g_image);
-                    mustRefresh = true;
-                }
-                if (event.key.key == SDLK_2 && !event.key.repeat)
-                {
-                    mustRefresh = true;
-                }
                 break;
             }
         }
@@ -530,4 +433,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
