@@ -11,6 +11,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_image/SDL_image.h>
+#include <SDL3_ttf/SDL_ttf.h>
 
 //------------------------------------------------------------------------------
 // Custom types, structs, constants, etc.
@@ -55,6 +56,7 @@ int hist[PIXEL_DEPTH];  // mapeia um nível de intensidade para a sua frequênci
 int max_hist = 0;       // valor de frequência máximo 
 double mean_hist = 0.0;
 double std_dev_hist = 0.0;
+
 
 //------------------------------------------------------------------------------
 // Function declaration
