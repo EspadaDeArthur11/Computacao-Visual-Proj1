@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_image/SDL_image.h>
@@ -265,6 +266,60 @@ void convert_gray_scale_image(SDL_Renderer *renderer, MyImage *image)
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
+void create_hist(MyImage *image) {
+    SDL_Log(">>> create_hist()");
+
+    SDL_Log("\tCriando o histograma...");
+
+    // Limpa o vetor do histograma
+    for (int i = 0; i < PIXEL_DEPTH; i++) {
+        hist[i] = 0;
+    }
+
+    SDL_LockSurface(image->surface);
+
+    const SDL_PixelFormatDetails *format = SDL_GetPixelFormatDetails(image->surface->format);
+    const size_t pixelCount = image->surface->w * image->surface->h;
+
+    Uint32 *pixels = (Uint32 *)image->surface->pixels;
+
+    // Só um canal é necessário pois a imagem estará em escala de cinza
+    Uint8 r = 0; 
+
+    // Preenche o vetor do histograma
+    for (size_t i = 0; i < pixelCount; i++) {
+      SDL_GetRGB(pixels[i], format, NULL, &r, NULL, NULL);
+      hist[r] += 1;
+    }
+
+    SDL_UnlockSurface(image->surface);
+
+    // Cálculo da média e atualiza máximo
+    double sum = 0;
+    for (int i = 0; i < PIXEL_DEPTH; i++) {
+        sum += (double) i * hist[i];
+
+        if (hist[i] > max_hist) {
+          max_hist = hist[i];
+        }
+    }
+    mean_hist = sum / (double) pixelCount;
+
+    // Cálculo do desvio padrão
+    sum = 0;
+    for (int i = 0; i < PIXEL_DEPTH; i++) {
+        double diff = (double) i - mean_hist;
+        sum += (diff * diff) * hist[i];
+    }
+    double variance = sum / (double) pixelCount;
+    std_dev_hist = sqrt(variance);
+
+    SDL_Log("<<< create_hist()");
+}
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
 static SDL_AppResult initialize(void)
 {
     SDL_Log(">>> initialize()");
@@ -328,14 +383,12 @@ static void render(void)
 {
     SDL_SetRenderDrawColor(g_window.renderer, 128, 128, 128, 255);
     SDL_RenderClear(g_window.renderer);
-    SDL_SetRenderDrawColor(g_childWindow.renderer, 128, 128, 128, 255);
+    SDL_SetRenderDrawColor(g_childWindow.renderer, 255, 255, 255, 255);
     SDL_RenderClear(g_childWindow.renderer);
 
     SDL_RenderTexture(g_window.renderer, g_image.texture, &g_image.rect, &g_image.rect);
 
     SDL_RenderPresent(g_window.renderer);
-
-    SDL_RenderTexture(g_childWindow.renderer, g_image.texture, &g_image.rect, &g_image.rect);
 
     SDL_RenderPresent(g_childWindow.renderer);
 }
@@ -434,6 +487,8 @@ int main(int argc, char *argv[])
 
     SDL_SyncWindow(g_window.window);
     SDL_SyncWindow(g_childWindow.window);
+
+    create_hist(&g_image);
 
     loop();
 
