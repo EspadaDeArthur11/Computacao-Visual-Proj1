@@ -320,6 +320,41 @@ void create_hist(MyImage *image) {
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
+void draw_hist() {
+    int y_axis_x = 40;
+    int y_axis_min_y = 350;
+    int y_axis_max_y = 40;
+
+    int x_axis_y = 330;
+    int x_axis_min_x = 20;
+    int x_axis_max_x = 550;
+
+    SDL_SetRenderDrawColor(g_childWindow.renderer, 255, 255, 255, 255);
+    SDL_RenderClear(g_childWindow.renderer);
+
+    SDL_SetRenderDrawColor(g_childWindow.renderer, 0, 0, 0, 255);
+    SDL_RenderLine(g_childWindow.renderer, y_axis_x, y_axis_max_y, y_axis_x, y_axis_min_y);
+
+    SDL_RenderLine(g_childWindow.renderer, x_axis_min_x, x_axis_y, x_axis_max_x, x_axis_y);
+
+    int current_x = y_axis_x + 1;
+    int current_y = x_axis_y;
+    for (int i = 0; i < PIXEL_DEPTH; i++) {
+      if (hist[i] == 0) {
+        continue;
+      }
+      // Normalização dos valores de frequência
+      current_y = x_axis_y - ((hist[i] * (x_axis_y - y_axis_max_y)) / max_hist);
+      SDL_RenderLine(g_childWindow.renderer, current_x, x_axis_y, current_x, current_y);
+      current_x += 2;
+    }
+
+    SDL_RenderPresent(g_childWindow.renderer);
+}
+
+//------------------------------------------------------------------------------
+//
+//------------------------------------------------------------------------------
 static SDL_AppResult initialize(void)
 {
     SDL_Log(">>> initialize()");
@@ -389,6 +424,8 @@ static void render(void)
     SDL_RenderTexture(g_window.renderer, g_image.texture, &g_image.rect, &g_image.rect);
 
     SDL_RenderPresent(g_window.renderer);
+
+    draw_hist();
 
     SDL_RenderPresent(g_childWindow.renderer);
 }
@@ -489,6 +526,8 @@ int main(int argc, char *argv[])
     SDL_SyncWindow(g_childWindow.window);
 
     create_hist(&g_image);
+
+    draw_hist();
 
     loop();
 
