@@ -2,24 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //------------------------------------------------------------------------------
-// Exemplo: 05-filter_image
+// Exemplo: 04-invert_image
 // O programa carrega o arquivo de imagem indicado na constante IMAGE_FILENAME
 // e exibe o conteúdo na janela ("kodim23.png" pertence ao "Kodak Image Set").
-//
+// A tecla '1' aplica uma transformação de intensidade (negativo da imagem).
 // Caso a imagem seja maior do que WINDOW_WIDTHxWINDOW_HEIGHT, a janela é
 // redimensionada logo após a imagem ser carregada.
 //
-// As teclas '0' e 'R' restauram a imagem original e a exibe na janela.
-// As teclas '1' a '9' aplicam um filtro de média na imagem original e exibem
-// a imagem filtrada na janela (cada tecla corresponde a um tamanho diferente
-// do filtro - veja o código da função loop()).
-//
-// Observações:
-// O código não está focado em performance e filtros grandes (ex. 29x29) levam
-// um certo tempo para processar toda a imagem. Para indicar que o programa
-// ainda está filtrando a imagem, o cursor do mouse é alterado para um
-// SDL_SYSTEM_CURSOR_WAIT e volta para o padrão após a filtragem ser concluída.
-//
+// Observação:
 // Em um projeto mais realista, o código abaixo provavelmente seria refatorado.
 // Alguns exemplos de refatoração do projeto:
 // - Uso de headers (.h) e outros arquivos .c (ex. estruturas e operações
@@ -28,7 +18,6 @@
 // - Redução de logs (ou melhor, seriam desativados na build release);
 // - Arquivo de imagem seria um parâmetro do programa (argv), ao invés de ser
 //   uma string constante IMAGE_FILENAME.
-//------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
@@ -44,7 +33,8 @@
 //------------------------------------------------------------------------------
 // Custom types, structs, constants, etc.
 //------------------------------------------------------------------------------
-static const char *WINDOW_TITLE = "Filter image";
+static const char *WINDOW_TITLE = "Imagem";
+static const char *CHILD_WINDOW_TITLE = "Histograma";
 static const char *IMAGE_FILENAME = "kodim23.png";
 
 enum constants
@@ -72,16 +62,12 @@ struct MyImage
 // Globals (argh!)
 //------------------------------------------------------------------------------
 static MyWindow g_window = { .window = NULL, .renderer = NULL };
+static MyWindow g_childWindow = { .window = NULL, .renderer = NULL };
 static MyImage g_image = {
     .surface = NULL,
     .texture = NULL,
     .rect = { .x = 0.0f, .y = 0.0f, .w = 0.0f, .h = 0.0f }
 };
-
-static SDL_Surface *surfaceFilter = NULL;
-
-static SDL_Cursor *defaultMouseCursor = NULL;
-static SDL_Cursor *hourglassMouseCursor = NULL;
 
 //------------------------------------------------------------------------------
 // Function declaration
@@ -89,29 +75,26 @@ static SDL_Cursor *hourglassMouseCursor = NULL;
 static bool MyWindow_initialize(MyWindow *window, const char *title, int width, int height, SDL_WindowFlags window_flags);
 static void MyWindow_destroy(MyWindow *window);
 static void MyImage_destroy(MyImage *image);
-static bool MyImage_update_texture_with_surface(MyImage* image, SDL_Renderer *renderer, SDL_Surface *surface);
-static bool MyImage_restore_texture(MyImage* image, SDL_Renderer *renderer);
 
 /**
-  * Carrega a imagem indicada no parâmetro `filename` e a converte para o formato
-  * RGBA32, eliminando dependência do formato original da imagem. A imagem
-  * carregada é armazenada em output_image.
-  * Caso ocorra algum erro no processo, a função retorna false.
-  */
-static bool load_rgba32(const char *filename, SDL_Renderer *renderer, MyImage *output_image);
+ * Carrega a imagem indicada no parâmetro `filename` e a converte para o formato
+ * RGBA32, eliminando dependência do formato original da imagem. A imagem
+ * carregada é armazenada em output_image.
+ */
+static void load_rgba32(const char *filename, SDL_Renderer *renderer, MyImage *output_image);
 
 /**
-  * Aplica um filtro de média na imagem original, salva o resultado na variável
-  * global surfaceFilter e atualiza o conteúdo da janela.
-  */
-static bool MyImage_blur(MyImage* image, SDL_Renderer *renderer, Uint32 filter_size);
-
-static void reset_image(void);
-
-static SDL_AppResult initialize(void);
-static void shutdown(void);
-static void render(void);
-static void loop(void);
+ * Acessa cada pixel da imagem (MyImage->surface) e inverte sua intensidade.
+ * Altera MyImage->surface e atualiza MyImage->texture.
+ * 
+ * Assumimos que os pixels da imagem estão no formato RGBA32 e que os níveis de
+ * intensidade estão no intervalo [0-255].
+ * 
+ * Na verdade, podemos desconsiderar o canal Alpha, já que ele não terá seu
+ * valor invertido. Neste caso, substituímos `SDL_GetRGBA()` e `SDL_MapRGBA()`
+ * por `SDL_GetRGB()` e `SDL_MapRGB()`, respectivamente.
+ */
+static void invert_image(SDL_Renderer *renderer, MyImage *image);
 
 //------------------------------------------------------------------------------
 //
@@ -189,71 +172,9 @@ void MyImage_destroy(MyImage *image)
 }
 
 //------------------------------------------------------------------------------
-// 
-//------------------------------------------------------------------------------
-bool MyImage_update_texture_with_surface(MyImage* image, SDL_Renderer *renderer, SDL_Surface *surface)
-{
-    SDL_Log(">>> MyImage_update_texture_with_surface()");
-
-    if (!image)
-    {
-        SDL_Log("\t*** Erro: Imagem inválida (image == NULL).");
-        SDL_Log("<<< MyImage_update_texture_with_surface()");
-        return false;
-    }
-
-    if (!renderer)
-    {
-        SDL_Log("\t*** Erro: Renderer inválido (renderer == NULL).");
-        SDL_Log("<<< MyImage_update_texture_with_surface()");
-        return false;
-    }
-
-    if (!surface)
-    {
-        SDL_Log("\t*** Erro: Superfície inválida (surface == NULL).");
-        SDL_Log("<<< MyImage_update_texture_with_surface()");
-        return false;
-    }
-
-    SDL_DestroyTexture(image->texture);
-
-    image->texture = SDL_CreateTextureFromSurface(renderer, surface);
-    if (!image->texture)
-    {
-        SDL_Log("\t*** Erro ao criar textura: %s", SDL_GetError());
-        SDL_Log("<<< MyImage_update_texture_with_surface()");
-        return false;
-    }
-
-    SDL_Log("\tObtendo dimensões da textura...");
-    SDL_GetTextureSize(image->texture, &image->rect.w, &image->rect.h);
-
-    SDL_Log("<<< MyImage_update_texture_with_surface()");
-    return true;
-}
-
-//------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-bool MyImage_restore_texture(MyImage* image, SDL_Renderer *renderer)
-{
-    SDL_Log(">>> MyImage_restore_texture()");
-    
-    if (!MyImage_update_texture_with_surface(image, renderer, image->surface))
-    {
-        SDL_Log("\t*** Erro ao restaurar a textura da imagem.");
-        return false;
-    }
-
-    SDL_Log("<<< MyImage_restore_texture()");
-    return true;  
-}
-
-//------------------------------------------------------------------------------
-//
-//------------------------------------------------------------------------------
-bool load_rgba32(const char *filename, SDL_Renderer *renderer, MyImage *output_image)
+void load_rgba32(const char *filename, SDL_Renderer *renderer, MyImage *output_image)
 {
     SDL_Log(">>> load_rgba32(\"%s\")", filename);
 
@@ -261,21 +182,21 @@ bool load_rgba32(const char *filename, SDL_Renderer *renderer, MyImage *output_i
     {
         SDL_Log("\t*** Erro: Nome do arquivo inválido (filename == NULL).");
         SDL_Log("<<< load_rgba32(\"%s\")", filename);
-        return false;
+        return;
     }
 
     if (!renderer)
     {
         SDL_Log("\t*** Erro: Renderer inválido (renderer == NULL).");
         SDL_Log("<<< load_rgba32(\"%s\")", filename);
-        return false;
+        return;
     }
 
     if (!output_image)
     {
         SDL_Log("\t*** Erro: Imagem de saída inválida (output_image == NULL).");
         SDL_Log("<<< load_rgba32(\"%s\")", filename);
-        return false;
+        return;
     }
 
     MyImage_destroy(output_image);
@@ -286,7 +207,7 @@ bool load_rgba32(const char *filename, SDL_Renderer *renderer, MyImage *output_i
     {
         SDL_Log("\t*** Erro ao carregar a imagem: %s", SDL_GetError());
         SDL_Log("<<< load_rgba32(\"%s\")", filename);
-        return false;
+        return;
     }
 
     SDL_Log("\tConvertendo superfície para formato RGBA32...");
@@ -296,146 +217,134 @@ bool load_rgba32(const char *filename, SDL_Renderer *renderer, MyImage *output_i
     {
         SDL_Log("\t*** Erro ao converter superfície para formato RGBA32: %s", SDL_GetError());
         SDL_Log("<<< load_rgba32(\"%s\")", filename);
-        return false;
+        return;
     }
 
     SDL_Log("\tCriando textura a partir da superfície...");
-    if (!MyImage_update_texture_with_surface(output_image, renderer, output_image->surface))
+    output_image->texture = SDL_CreateTextureFromSurface(renderer, output_image->surface);
+    if (!output_image->texture)
     {
-        SDL_Log("\t*** Erro ao criar textura.");
+        SDL_Log("\t*** Erro ao criar textura: %s", SDL_GetError());
         SDL_Log("<<< load_rgba32(\"%s\")", filename);
-        return false;
+        return;
     }
 
+    SDL_Log("\tObtendo dimensões da textura...");
+    SDL_GetTextureSize(output_image->texture, &output_image->rect.w, &output_image->rect.h);
+
     SDL_Log("<<< load_rgba32(\"%s\")", filename);
-    return true;
 }
 
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-bool MyImage_blur(MyImage* image, SDL_Renderer *renderer, Uint32 filter_size)
+void convert_gray_scale_image(SDL_Renderer *renderer, MyImage *image)
 {
-    SDL_Log(">>> MyImage_blur(filter_size: %u)", filter_size);
-
-    if (!image || !image->surface)
-    {
-        SDL_Log("\t*** Erro: Imagem inválida (image == NULL ou image->surface == NULL).");
-        SDL_Log("<<< MyImage_blur(filter_size: %u)", filter_size);
-        return false;
-    }
+    SDL_Log(">>> convert_gray_scale_image()");
 
     if (!renderer)
     {
         SDL_Log("\t*** Erro: Renderer inválido (renderer == NULL).");
-        SDL_Log("<<< MyImage_blur(filter_size: %u)", filter_size);
-        return false;
+        SDL_Log("<<< convert_gray_scale_image()");
+        return;
     }
 
-    if (!surfaceFilter)
+    if (!image || !image->surface)
     {
-        surfaceFilter = SDL_CreateSurface(g_image.surface->w, g_image.surface->h, g_image.surface->format);
-        if (!surfaceFilter)
-        {
-            SDL_Log("*** Erro: Superfície extra (filter) inválida!");
-            SDL_Log("<<< MyImage_blur(filter_size: %u)", filter_size);
-            return false;
-        }
+        SDL_Log("\t*** Erro: Imagem inválida (image == NULL ou image->surface == NULL).");
+        SDL_Log("<<< convert_gray_scale_image()");
+        return;
     }
 
-    SDL_Log("\tExecutando blur com filter_size: %u...", filter_size);
-    SDL_SetCursor(hourglassMouseCursor);
-
+    // Para acessar os pixels de uma superfície, precisamos chamar essa função.
     SDL_LockSurface(image->surface);
-    SDL_LockSurface(surfaceFilter);
 
     const SDL_PixelFormatDetails *format = SDL_GetPixelFormatDetails(image->surface->format);
+    const size_t pixelCount = image->surface->w * image->surface->h;
+
     Uint32 *pixels = (Uint32 *)image->surface->pixels;
-    Uint32 *output = (Uint32 *)surfaceFilter->pixels;
-    
-    const int filterFinalSize = filter_size * filter_size;
-    const int filterHalfSize = filter_size >> 1;
-    const float average = 1.0f / filterFinalSize;
+    Uint8 r = 0;
+    Uint8 g = 0;
+    Uint8 b = 0;
+    Uint8 a = 0;
+    Uint8 c = 0;
 
-    SDL_Color filter[filterFinalSize] = { };
-    SDL_Color filteredPixel = { .r = 0, .g = 0, .b = 0, .a = 255 };
-    Uint32 r = 0;
-    Uint32 g = 0;
-    Uint32 b = 0;
-    Uint32 filterIndex = 0;
-    
-    for (int row = 0; row < image->surface->h; ++row)
+    for (size_t i = 0; i < pixelCount; ++i)
     {
-        for (int col = 0; col < image->surface->w; ++col)
-        {
-            // Obtém as intensidades de cada pixel que "batem" com o filtro.
-            filterIndex = 0;
-            for (int rowNeighbour = -filterHalfSize; rowNeighbour <= filterHalfSize; ++rowNeighbour)
-            {
-                for (int colNeighbour = -filterHalfSize; colNeighbour <= filterHalfSize; ++colNeighbour)
-                {
-                    // Casos em que parte do filtro está fora da imagem. Neste exemplo,
-                    // apenas zeramos a intensidade das posições fora da imagem.
-                    if ((row + rowNeighbour < 0) || (row + rowNeighbour >= image->surface->h)
-                        || (col + colNeighbour < 0) || (col + colNeighbour >= image->surface->w))
-                    {
-                        filter[filterIndex].r = filter[filterIndex].g = filter[filterIndex].b = 0;
-                    }
-                    else
-                    {
-                        SDL_GetRGB(pixels[((row + rowNeighbour) * image->surface->w + (col + colNeighbour))], format, NULL,
-                            &filter[filterIndex].r, &filter[filterIndex].g, &filter[filterIndex].b);
-                    }
-                    ++filterIndex;
-                }
-            }
-        
-            // Calcula a média dos pixels usados na filtragem e salva na saída.
-            r = g = b = 0;
-            for (int i = 0; i < filterFinalSize; ++i)
-            {
-                r += filter[i].r;
-                g += filter[i].g;
-                b += filter[i].b;
-            }
-            filteredPixel.r = (Uint8)(r * average);
-            filteredPixel.g = (Uint8)(g * average);
-            filteredPixel.b = (Uint8)(b * average);
+        SDL_GetRGBA(pixels[i], format, NULL, &r, &g, &b, &a);
 
-            output[row * image->surface->w + col] = SDL_MapRGB(format, NULL, filteredPixel.r, filteredPixel.g, filteredPixel.b);
-        }
-    }  
+        c = 0.2125 * r + 0.7154 * g + 0.0721 * b;
 
-    SDL_UnlockSurface(surfaceFilter);
+        pixels[i] = SDL_MapRGBA(format, NULL, c, c, c, a);
+    }
+
+    // Após manipularmos os pixels da superfície, liberamos a superfície.
     SDL_UnlockSurface(image->surface);
 
-    MyImage_update_texture_with_surface(image, renderer, surfaceFilter);
-    render();
+    // Atualizamos a textura a ser renderizada pelo SDL_Renderer, com base no
+    // novo conteúdo da superfície.
+    SDL_DestroyTexture(image->texture);
+    image->texture = SDL_CreateTextureFromSurface(renderer, image->surface);
 
-    SDL_Log("\tBlur com filter_size: %u finalizado...", filter_size);
-    SDL_SetCursor(defaultMouseCursor);
-
-    SDL_Log("<<< MyImage_blur(filter_size: %u)", filter_size);
-    return true;
+    SDL_Log("<<< convert_gray_scale_image()");
 }
 
-//------------------------------------------------------------------------------
-// 
-//------------------------------------------------------------------------------
-void reset_image(void)
+void invert_image(SDL_Renderer *renderer, MyImage *image)
 {
-    SDL_Log(">>> reset_image()");
+    SDL_Log(">>> invert_image()");
 
-    MyImage_restore_texture(&g_image, g_window.renderer);
-    render();
+    if (!renderer)
+    {
+        SDL_Log("\t*** Erro: Renderer inválido (renderer == NULL).");
+        SDL_Log("<<< invert_image()");
+        return;
+    }
 
-    SDL_Log("<<< reset_image()");
+    if (!image || !image->surface)
+    {
+        SDL_Log("\t*** Erro: Imagem inválida (image == NULL ou image->surface == NULL).");
+        SDL_Log("<<< invert_image()");
+        return;
+    }
+
+    // Para acessar os pixels de uma superfície, precisamos chamar essa função.
+    SDL_LockSurface(image->surface);
+
+    const SDL_PixelFormatDetails *format = SDL_GetPixelFormatDetails(image->surface->format);
+    const size_t pixelCount = image->surface->w * image->surface->h;
+
+    Uint32 *pixels = (Uint32 *)image->surface->pixels;
+    Uint8 r = 0;
+    Uint8 g = 0;
+    Uint8 b = 0;
+    Uint8 a = 0;
+
+    for (size_t i = 0; i < pixelCount; ++i)
+    {
+        SDL_GetRGBA(pixels[i], format, NULL, &r, &g, &b, &a);
+
+        r = 255 - r;
+        g = 255 - g;
+        b = 255 - b;
+
+        pixels[i] = SDL_MapRGBA(format, NULL, r, g, b, a);
+    }
+
+    // Após manipularmos os pixels da superfície, liberamos a superfície.
+    SDL_UnlockSurface(image->surface);
+
+    // Atualizamos a textura a ser renderizada pelo SDL_Renderer, com base no
+    // novo conteúdo da superfície.
+    SDL_DestroyTexture(image->texture);
+    image->texture = SDL_CreateTextureFromSurface(renderer, image->surface);
+
+    SDL_Log("<<< invert_image()");
 }
 
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-SDL_AppResult initialize(void)
+static SDL_AppResult initialize(void)
 {
     SDL_Log(">>> initialize()");
 
@@ -447,10 +356,26 @@ SDL_AppResult initialize(void)
         return SDL_APP_FAILURE;
     }
 
-    SDL_Log("\tCriando janela e renderizador...");
+    SDL_Log("\tCriando janela principal e renderizador...");
     if (!MyWindow_initialize(&g_window, WINDOW_TITLE, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0))
     {
-        SDL_Log("\t*** Erro ao criar a janela e/ou renderizador: %s", SDL_GetError());
+        SDL_Log("\t*** Erro ao criar a janela principal e/ou renderizador: %s", SDL_GetError());
+        SDL_Log("<<< initialize()");
+        return SDL_APP_FAILURE;
+    }
+
+    SDL_Log("\tCriando janela secundária e renderizador...");
+    if (!MyWindow_initialize(&g_childWindow, CHILD_WINDOW_TITLE, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0))
+    {
+        SDL_Log("\t*** Erro ao criar a janela secundária e/ou renderizador: %s", SDL_GetError());
+        SDL_Log("<<< initialize()");
+        return SDL_APP_FAILURE;
+    }
+
+    SDL_Log("\tDefinindo janela secundária como filha da principal...");
+    if (!SDL_SetWindowParent(g_childWindow.window, g_window.window))
+    {
+        SDL_Log("\t*** Erro ao definir a janela secundária como filha: %s", SDL_GetError());
         SDL_Log("<<< initialize()");
         return SDL_APP_FAILURE;
     }
@@ -462,19 +387,9 @@ SDL_AppResult initialize(void)
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-void shutdown(void)
+static void shutdown(void)
 {
     SDL_Log(">>> shutdown()");
-
-    SDL_Log("Destruindo cursores do mouse...");
-    SDL_DestroyCursor(hourglassMouseCursor);
-    SDL_DestroyCursor(defaultMouseCursor);
-    defaultMouseCursor = NULL;
-    hourglassMouseCursor = NULL;
-
-    SDL_Log("Destruindo superfície extra (filter)...");
-    SDL_DestroySurface(surfaceFilter);
-    surfaceFilter = NULL;
 
     MyImage_destroy(&g_image);
     MyWindow_destroy(&g_window);
@@ -488,23 +403,33 @@ void shutdown(void)
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-void render(void)
+static void render(void)
 {
     SDL_SetRenderDrawColor(g_window.renderer, 128, 128, 128, 255);
     SDL_RenderClear(g_window.renderer);
+    SDL_SetRenderDrawColor(g_childWindow.renderer, 128, 128, 128, 255);
+    SDL_RenderClear(g_childWindow.renderer);
 
     SDL_RenderTexture(g_window.renderer, g_image.texture, &g_image.rect, &g_image.rect);
 
     SDL_RenderPresent(g_window.renderer);
+
+    SDL_RenderTexture(g_childWindow.renderer, g_image.texture, &g_image.rect, &g_image.rect);
+
+    SDL_RenderPresent(g_childWindow.renderer);
 }
 
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-void loop(void)
+static void loop(void)
 {
     SDL_Log(">>> loop()");
 
+    // Para melhorar o uso da CPU (e consumo de energia), só atualizaremos o
+    // conteúdo da janela se realmente for necessário. Nesse exemplo, isso
+    // acontece quando invertemos os pixels da imagem.
+    bool mustRefresh = false;
     render();
 
     SDL_Event event;
@@ -520,29 +445,24 @@ void loop(void)
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                if (!event.key.repeat)
+                if (event.key.key == SDLK_1 && !event.key.repeat)
                 {
-                    switch (event.key.key)
-                    {
-                        case SDLK_R: // fallthrough.
-                        case SDLK_0: reset_image(); break;
-                        case SDLK_1: MyImage_blur(&g_image, g_window.renderer, 3); break;
-                        case SDLK_2: MyImage_blur(&g_image, g_window.renderer, 5); break;
-                        case SDLK_3: MyImage_blur(&g_image, g_window.renderer, 7); break;
-                        case SDLK_4: MyImage_blur(&g_image, g_window.renderer, 11); break;
-                        case SDLK_5: MyImage_blur(&g_image, g_window.renderer, 15); break;
-                        case SDLK_6: MyImage_blur(&g_image, g_window.renderer, 29); break;
-                        case SDLK_7: MyImage_blur(&g_image, g_window.renderer, 41); break;
-                        case SDLK_8: MyImage_blur(&g_image, g_window.renderer, 73); break;
-                        case SDLK_9: MyImage_blur(&g_image, g_window.renderer, 101); break;
-                    }
+                    invert_image(g_window.renderer, &g_image);
+                    mustRefresh = true;
+                }
+                if (event.key.key == SDLK_2 && !event.key.repeat)
+                {
+                    mustRefresh = true;
                 }
                 break;
             }
         }
 
-        // Breve pausa para diminuir o processamento contínuo do programa...
-        SDL_Delay(50);
+        if (mustRefresh)
+        {
+            render();
+            mustRefresh = false;
+        }
     }
     
     SDL_Log("<<< loop()");
@@ -558,41 +478,56 @@ int main(int argc, char *argv[])
     if (initialize() == SDL_APP_FAILURE)
         return SDL_APP_FAILURE;
 
-    if (!load_rgba32(IMAGE_FILENAME, g_window.renderer, &g_image))
-        return SDL_APP_FAILURE;
+    load_rgba32(IMAGE_FILENAME, g_window.renderer, &g_image);
 
-    SDL_Log("Criando cursores do mouse...");
-    defaultMouseCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
-    hourglassMouseCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_WAIT);
-    SDL_SetCursor(defaultMouseCursor);
+    // Verifica se a imagem já vem em escala de cinza
+    SDL_Surface *image = IMG_Load(IMAGE_FILENAME);
+    SDL_LockSurface(image);
+    Uint32* pixels = (Uint32*)image->pixels;
+    bool escalaCinza = true;
+    Uint8 r, g, b;
 
-    SDL_Log("Criando superfície extra (filter)...");
-    surfaceFilter = SDL_CreateSurface(g_image.surface->w, g_image.surface->h, g_image.surface->format);
+    for (int i = 0; i < image->w * image->h; ++i) {
+        SDL_GetRGB(pixels[i], SDL_GetPixelFormatDetails(image->format), NULL, &r, &g, &b);
+        if (r != g || g != b) {
+            escalaCinza = false;
+            break;
+        }
+    }
 
     // Altera tamanho da janela se a imagem for maior do que o tamanho padrão
-    // e reposiciona no canto superior esquerdo da tela.
-    int imageWidth = (int)g_image.rect.w;
-    int imageHeight = (int)g_image.rect.h;
-    if (imageWidth > DEFAULT_WINDOW_WIDTH || imageHeight > DEFAULT_WINDOW_HEIGHT)
-    {
-        // Obtém o tamanho da borda da janela. Neste exemplo, só queremos saber
-        // o lado superior e o lado esquerdo, para posicionar a janela corretamente
-        // (posicionar a janela na coordenada (0, 0) faria com que a borda do
-        // programa ficasse fora da região da tela).
-        int top = 0;
-        int left = 0;
-        SDL_GetWindowBordersSize(g_window.window, &top, &left, NULL, NULL);
+    // e reposiciona no centro da tela.
+    int imageW = (int)g_image.rect.w;
+    int imageH = (int)g_image.rect.h;
 
-        SDL_Log("Redefinindo dimensões da janela, de (%d, %d) para (%d, %d), e alterando a posição para (%d, %d).",
-            DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, imageWidth, imageHeight, left, top);
+    SDL_SetWindowSize(g_window.window, imageW, imageH);
+    SDL_SetWindowPosition(g_window.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
-        SDL_SetWindowSize(g_window.window, imageWidth, imageHeight);
-        SDL_SetWindowPosition(g_window.window, left, top);
+    // Obtém o tamanho da borda das janelas e do monitor. 
+    int childH = 0;
+    int childW = 0;
+    SDL_GetWindowSize(g_childWindow.window, &childW, &childH);
 
-        SDL_SyncWindow(g_window.window);
-    }
+    const int meio = 16;
+
+    // Pega a posição da janela pai
+    int parentX = 0;
+    int parentY = 0;
+    SDL_GetWindowPosition(g_window.window, &parentX, &parentY);
+
+    // Coloca a posição da janela filho à direita da janela pai,
+    // com um espaço de "meio" pixels entre elas
+    SDL_SetWindowPosition(g_childWindow.window,
+        parentX + imageW + meio, parentY + (imageH - childH) / 2);
+
+    // Caso não esteja em escala de cinza, converte a imagem
+    if (!escalaCinza) convert_gray_scale_image(g_window.renderer, &g_image);
+
+    SDL_SyncWindow(g_window.window);
+    SDL_SyncWindow(g_childWindow.window);
 
     loop();
 
     return 0;
 }
+
