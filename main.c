@@ -405,8 +405,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Altera tamanho da janela se a imagem for maior do que o tamanho padrão
-    // e reposiciona no centro da tela.
+    // Altera tamanho da janela e reposiciona no centro da tela.
     int imageW = (int)g_image.rect.w;
     int imageH = (int)g_image.rect.h;
 
@@ -418,7 +417,7 @@ int main(int argc, char *argv[])
     int childW = 0;
     SDL_GetWindowSize(g_childWindow.window, &childW, &childH);
 
-    const int meio = 16;
+    const int padding = 16;
 
     // Pega a posição da janela pai
     int parentX = 0;
@@ -426,9 +425,9 @@ int main(int argc, char *argv[])
     SDL_GetWindowPosition(g_window.window, &parentX, &parentY);
 
     // Coloca a posição da janela filho à direita da janela pai,
-    // com um espaço de "meio" pixels entre elas
+    // com um espaço de "padding" pixels entre elas
     SDL_SetWindowPosition(g_childWindow.window,
-        parentX + imageW + meio, parentY + (imageH - childH) / 2);
+        parentX + imageW + padding, parentY + (imageH - childH) / 2);
 
     // Caso não esteja em escala de cinza, converte a imagem
     if (!escalaCinza) convert_gray_scale_image(g_window.renderer, &g_image);
