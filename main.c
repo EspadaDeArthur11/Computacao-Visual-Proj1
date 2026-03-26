@@ -16,12 +16,13 @@
 //------------------------------------------------------------------------------
 static const char *WINDOW_TITLE = "Imagem";
 static const char *CHILD_WINDOW_TITLE = "Histograma";
-static const char *IMAGE_FILENAME = "kodim23.png";
+static char *IMAGE_FILENAME = "";
 
 enum constants
 {
     DEFAULT_WINDOW_WIDTH = 640,
     DEFAULT_WINDOW_HEIGHT = 480,
+    PIXEL_DEPTH = 256,
 };
 
 typedef struct MyWindow MyWindow;
@@ -49,6 +50,10 @@ static MyImage g_image = {
     .texture = NULL,
     .rect = { .x = 0.0f, .y = 0.0f, .w = 0.0f, .h = 0.0f }
 };
+int hist[PIXEL_DEPTH];  // mapeia um nível de intensidade para a sua frequência na imagem
+int max_hist = 0;       // valor de frequência máximo 
+double mean_hist = 0.0;
+double std_dev_hist = 0.0;
 
 //------------------------------------------------------------------------------
 // Function declaration
@@ -380,6 +385,8 @@ int main(int argc, char *argv[])
 
     if (initialize() == SDL_APP_FAILURE)
         return SDL_APP_FAILURE;
+
+    IMAGE_FILENAME = argv[1];
 
     load_rgba32(IMAGE_FILENAME, g_window.renderer, &g_image);
 
