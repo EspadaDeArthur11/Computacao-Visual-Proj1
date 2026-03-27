@@ -531,6 +531,16 @@ static void loop(void)
             case SDL_EVENT_QUIT:
                 isRunning = false;
                 break;
+
+            case SDL_EVENT_KEY_DOWN:
+                if (event.key.key == SDLK_s)
+                {
+                    if (!IMG_SavePNG(g_image.surface, "output_image.png"))
+                        SDL_Log("Erro ao salvar imagem: %s", SDL_GetError());
+                    else
+                        SDL_Log("Imagem salva em output_image.png");
+                }
+                break;
             }
         }
 
@@ -540,7 +550,7 @@ static void loop(void)
             mustRefresh = false;
         }
     }
-    
+
     SDL_Log("<<< loop()");
 }
 
