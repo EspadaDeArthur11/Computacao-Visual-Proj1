@@ -272,6 +272,9 @@ void create_hist(MyImage *image) {
     SDL_Log(">>> create_hist()");
 
     SDL_Log("\tCriando o histograma...");
+    max_hist = 0;
+    mean_hist = 0.0;
+    std_dev_hist = 0.0;
 
     // Limpa o vetor do histograma
     for (int i = 0; i < PIXEL_DEPTH; i++) {
