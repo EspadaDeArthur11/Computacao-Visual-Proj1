@@ -405,7 +405,6 @@ void draw_hist() {
         }
     }
 }
-}
 
 //------------------------------------------------------------------------------
 //
@@ -446,7 +445,7 @@ static SDL_AppResult initialize(void)
     }
 
     SDL_Log("\tCriando janela secundária e renderizador...");
-    if (!MyWindow_initialize(&g_childWindow, _TITLE, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0))
+    if (!MyWindow_initialize(&g_childWindow, CHILD_WINDOW_TITLE, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0))
     {
         SDL_Log("\t*** Erro ao criar a janela secundária e/ou renderizador: %s", SDL_GetError());
         SDL_Log("<<< initialize()");
@@ -500,7 +499,7 @@ static void render(void)
     SDL_SetRenderDrawColor(g_childWindow.renderer, 255, 255, 255, 255);
     SDL_RenderClear(g_childWindow.renderer);
 
-    SDL_RenderTexture(g_window.renderer, g_image.texture, &g_image.rect, &g_image.rect);
+    SDL_RenderTexture(g_window.renderer, g_image.texture, NULL, &g_image.rect);
 
     SDL_RenderPresent(g_window.renderer);
 
@@ -554,13 +553,23 @@ int main(int argc, char *argv[])
 
     if (initialize() == SDL_APP_FAILURE)
         return SDL_APP_FAILURE;
-
+    if (argc < 2)
+    {
+        SDL_Log("Uso: programa caminho_da_imagem");
+        return SDL_APP_FAILURE;
+    }
     IMAGE_FILENAME = argv[1];
 
     load_rgba32(IMAGE_FILENAME, g_window.renderer, &g_image);
 
     // Verifica se a imagem já vem em escala de cinza
     SDL_Surface *image = IMG_Load(IMAGE_FILENAME);
+    if (!image)
+    {
+    SDL_Log("Erro ao carregar imagem: %s", SDL_GetError());
+    return SDL_APP_FAILURE;
+    }
+
     SDL_LockSurface(image);
     Uint32* pixels = (Uint32*)image->pixels;
     bool escalaCinza = true;
@@ -573,6 +582,8 @@ int main(int argc, char *argv[])
             break;
         }
     }
+    SDL_UnlockSurface(image);
+    SDL_DestroySurface(image);
 
     // Altera tamanho da janela e reposiciona no centro da tela.
     int imageW = (int)g_image.rect.w;
