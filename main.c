@@ -533,7 +533,7 @@ static void loop(void)
                 break;
 
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_s)
+                if (event.key.key == SDLK_S)
                 {
                     if (!IMG_SavePNG(g_image.surface, "output_image.png"))
                         SDL_Log("Erro ao salvar imagem: %s", SDL_GetError());
