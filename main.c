@@ -369,6 +369,21 @@ static SDL_AppResult initialize(void)
         return SDL_APP_FAILURE;
     }
 
+    if (!TTF_Init())//inicializacao do ttf
+    {
+        SDL_Log("\t*** Erro ao iniciar SDL_ttf: %s", SDL_GetError());
+        SDL_Log("<<< initialize()");
+        return SDL_APP_FAILURE;
+    }
+
+    g_font = TTF_OpenFont(FONT_FILENAME, 16.0f);
+    if (!g_font)
+    {
+        SDL_Log("\t*** Erro ao abrir fonte: %s", SDL_GetError());
+        SDL_Log("<<< initialize()");
+        return SDL_APP_FAILURE;
+    }
+
     SDL_Log("\tCriando janela principal e renderizador...");
     if (!MyWindow_initialize(&g_window, WINDOW_TITLE, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0))
     {
@@ -378,7 +393,7 @@ static SDL_AppResult initialize(void)
     }
 
     SDL_Log("\tCriando janela secundária e renderizador...");
-    if (!MyWindow_initialize(&g_childWindow, CHILD_WINDOW_TITLE, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0))
+    if (!MyWindow_initialize(&g_childWindow, _TITLE, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, 0))
     {
         SDL_Log("\t*** Erro ao criar a janela secundária e/ou renderizador: %s", SDL_GetError());
         SDL_Log("<<< initialize()");
@@ -404,8 +419,17 @@ static void shutdown(void)
 {
     SDL_Log(">>> shutdown()");
 
+    if (g_font) //complementa para encerrar o ttf
+    {
+        TTF_CloseFont(g_font);
+        g_font = NULL;
+    }
+
     MyImage_destroy(&g_image);
+    MyWindow_destroy(&g_childWindow);
     MyWindow_destroy(&g_window);
+
+    TTF_Quit();
 
     SDL_Log("\tEncerrando SDL...");
     SDL_Quit();
