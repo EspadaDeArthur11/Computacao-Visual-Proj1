@@ -52,6 +52,8 @@ static MyImage g_image = {
     .texture = NULL,
     .rect = { .x = 0.0f, .y = 0.0f, .w = 0.0f, .h = 0.0f }
 };
+static TTF_Font *g_font = NULL; //caminho arquivo ttf
+static const char *FONT_FILENAME = "font/ARIAL.ttf";//caminho arquivo ttf
 int hist[PIXEL_DEPTH];  // mapeia um nível de intensidade para a sua frequência na imagem
 int max_hist = 0;       // valor de frequência máximo 
 double mean_hist = 0.0;
