@@ -355,8 +355,56 @@ void draw_hist() {
       SDL_RenderLine(g_childWindow.renderer, current_x, x_axis_y, current_x, current_y);
       current_x += 2;
     }
+     const char *mean_class = NULL; //escritura no renderer 
+     const char *contrast_class = NULL;
 
-    SDL_RenderPresent(g_childWindow.renderer);
+    if (mean_hist <= 85)
+        mean_class = "escura";
+    else if (mean_hist <= 170)
+        mean_class = "media";
+    else
+        mean_class = "clara";
+
+    if (std_dev_hist <= 45)
+        contrast_class = "baixo";
+    else if (std_dev_hist <= 85)
+        contrast_class = "medio";
+    else
+        contrast_class = "alto";
+
+    if (g_font) {
+        SDL_Color black = { 0, 0, 0, 255 };
+        char text[128];
+
+        SDL_snprintf(text, sizeof(text), "Media: %d (%s)", (int)(mean_hist + 0.5), mean_class);
+        SDL_Surface *textSurface = TTF_RenderText_Blended(g_font, text, 0, black);
+        if (textSurface) {
+            SDL_Texture *textTexture = SDL_CreateTextureFromSurface(g_childWindow.renderer, textSurface);
+            if (textTexture) {
+                float tw = 0.0f, th = 0.0f;
+                SDL_GetTextureSize(textTexture, &tw, &th);
+                SDL_FRect dst = { 40.0f, 370.0f, tw, th };
+                SDL_RenderTexture(g_childWindow.renderer, textTexture, NULL, &dst);
+                SDL_DestroyTexture(textTexture);
+            }
+            SDL_DestroySurface(textSurface);
+        }
+
+        SDL_snprintf(text, sizeof(text), "Desvio padrao: %d (%s)", (int)(std_dev_hist + 0.5), contrast_class);
+        textSurface = TTF_RenderText_Blended(g_font, text, 0, black);
+        if (textSurface) {
+            SDL_Texture *textTexture = SDL_CreateTextureFromSurface(g_childWindow.renderer, textSurface);
+            if (textTexture) {
+                float tw = 0.0f, th = 0.0f;
+                SDL_GetTextureSize(textTexture, &tw, &th);
+                SDL_FRect dst = { 40.0f, 395.0f, tw, th };
+                SDL_RenderTexture(g_childWindow.renderer, textTexture, NULL, &dst);
+                SDL_DestroyTexture(textTexture);
+            }
+            SDL_DestroySurface(textSurface);
+        }
+    }
+}
 }
 
 //------------------------------------------------------------------------------
